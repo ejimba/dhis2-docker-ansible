@@ -1,0 +1,70 @@
+---
+- name: Install Docker
+  hosts: dhis
+  become: yes
+  tasks:
+    - name: Update apt repo and cache
+      apt:
+        update_cache: yes
+        force_apt_get: yes
+        cache_valid_time: 3600
+
+    - name: Install docker deps
+      apt:
+        name: "{{ packages }}"
+      vars:
+        packages:
+          - ca-certificates
+          - curl
+          - git
+
+    - name: Add Docker GPG key
+      ansible.builtin.apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+  
+    - name: Add Docker repo
+      ansible.builtin.apt_repository:
+        repo: deb [arch=amd64] https://download.docker.com/linux/ubuntu jammy stable
+        state: present
+
+    - name: Install Docker
+      apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-buildx-plugin
+          - docker-compose-plugin
+        state: latest
+        update_cache: yes
+
+    - name: Ensure Docker is running
+      service:
+        name: docker
+        state: started
+        enabled: yes
+    
+    - name: Clone dhis2-docker repository
+      git:
+        repo: 'https://github.com/ejimba/dhis2-docker.git'
+        dest: /opt/dhis2-docker
+        force: yes
+
+    - name: Set JAVA_OPTS in docker-compose.yml
+      ansible.builtin.lineinfile:
+        path: /opt/dhis2-docker/docker-compose.yml
+        regexp: 'JAVA_OPTS: -Xms2048m -Xmx4096m'
+        line: '      JAVA_OPTS: -Xms10240m -Xmx10240m'
+
+    - name: Change permissions of /opt/dhis2-docker/data/dhis
+      ansible.builtin.file:
+        path: /opt/dhis2-docker/data/dhis
+        mode: '0777'
+        state: directory
+        recurse: yes
+
+    - name: Run Docker Compose for dhis2-docker
+      command: docker compose up -d
+      args:
+        chdir: /opt/dhis2-docker

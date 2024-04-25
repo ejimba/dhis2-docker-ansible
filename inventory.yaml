@@ -1,0 +1,7 @@
+dhis:
+  hosts:
+    dhis_01:
+      ansible_host: 000.000.000.000
+  vars:
+    ansible_ssh_user: root
+    ansible_ssh_pass: password

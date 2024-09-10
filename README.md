@@ -16,12 +16,14 @@ You must have Ansible installed on your local machine to use the playbook.
 #### For macOS:
 ```bash
 brew install ansible
+brew install hudochenkov/sshpass/sshpass
 ```
 
 #### For Ubuntu:
 ```bash
 sudo apt update
 sudo apt install ansible
+sudo apt-get install sshpass
 ```
 
 ### Configuring Access Credentials

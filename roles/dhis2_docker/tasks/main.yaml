@@ -1,0 +1,46 @@
+---
+
+- name: Create base directory for each DHIS2 instance
+  file:
+    path: "/opt/dhis2/{{ item.instance_name }}"
+    state: directory
+    mode: '0755'
+  with_items: "{{ dhis2_instances }}"
+
+- name: Create postgres directory for each DHIS2 instance
+  file:
+    path: "/opt/dhis2/{{ item.instance_name }}/postgres"
+    state: directory
+    mode: '0755'
+  with_items: "{{ dhis2_instances }}"
+
+- name: Create dhis directory for each DHIS2 instance
+  file:
+    path: "/opt/dhis2/{{ item.instance_name }}/dhis"
+    state: directory
+    mode: '0755'
+  with_items: "{{ dhis2_instances }}"
+
+- name: Set permissions to 777 for /DHIS2_home for each instance
+  file:
+    path: "/opt/dhis2/{{ item.instance_name }}/dhis"
+    mode: '0777'
+  with_items: "{{ dhis2_instances }}"
+
+- name: Copy dhis.conf to dhis directory for each instance
+  copy:
+    src: dhis.conf
+    dest: "/opt/dhis2/{{ item.instance_name }}/dhis/dhis.conf"
+  with_items: "{{ dhis2_instances }}"
+
+- name: Create docker-compose.yml for each DHIS2 instance
+  template:
+    src: docker-compose-instance.yml.j2
+    dest: "/opt/dhis2/{{ item.instance_name }}/docker-compose.yml"
+  with_items: "{{ dhis2_instances }}"
+
+- name: Bring up Docker Compose for each DHIS2 instance
+  command: docker-compose up -d
+  args:
+    chdir: "/opt/dhis2/{{ item.instance_name }}"
+  with_items: "{{ dhis2_instances }}"

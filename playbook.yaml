@@ -1,70 +1,94 @@
 ---
-- name: Install Docker
-  hosts: dhis
+- hosts: dhis
   become: yes
+  vars:
+    dhis2_instances:
+      - instance_name: dhis2_instance1
+        domain: "instance1.yourdomain.com"
+        email: "instance1@yourdomain.com"
+        port: "8080"
+        ssl_enabled: "true"
+        timezone: "Africa/Nairobi"
+        java_opts: "-Xms2048m -Xmx4096m"
+        postgres_host: "dhis2_instance1_postgres"
+        postgres_port: "5432"
+        postgres_db: "dhis2_db1"
+        postgres_user: "dhis_user1"
+        postgres_password: "dhis_password1"
+
+      - instance_name: dhis2_instance2
+        domain: null
+        email: null
+        port: "8081"
+        ssl_enabled: "false"
+        timezone: "Africa/Nairobi"
+        java_opts: "-Xms4096m -Xmx4096m"
+        postgres_host: "dhis2_instance2_postgres"
+        postgres_port: "5432"
+        postgres_db: "dhis2_db2"
+        postgres_user: "dhis_user2"
+        postgres_password: "dhis_password2"
+
+      - instance_name: dhis2_instance3
+        domain: "instance3.yourdomain.com"
+        email: "instance3@yourdomain.com"
+        port: "8082"
+        ssl_enabled: "true"
+        timezone: "Africa/Nairobi"
+        java_opts: "-Xms1024m -Xmx2048m"
+        postgres_host: "dhis2_instance3_postgres"
+        postgres_port: "5432"
+        postgres_db: "dhis2_db3"
+        postgres_user: "dhis_user3"
+        postgres_password: "dhis_password3"
+
   tasks:
-    - name: Update apt repo and cache
+    - name: Ensure Docker is installed
       apt:
-        update_cache: yes
-        force_apt_get: yes
-        cache_valid_time: 3600
-
-    - name: Install docker deps
-      apt:
-        name: "{{ packages }}"
-      vars:
-        packages:
-          - ca-certificates
-          - curl
-          - git
-
-    - name: Add Docker GPG key
-      ansible.builtin.apt_key:
-        url: https://download.docker.com/linux/ubuntu/gpg
-        state: present
-  
-    - name: Add Docker repo
-      ansible.builtin.apt_repository:
-        repo: deb [arch=amd64] https://download.docker.com/linux/ubuntu jammy stable
+        name: docker.io
         state: present
 
-    - name: Install Docker
+    - name: Ensure Docker Compose is installed
       apt:
-        name:
-          - docker-ce
-          - docker-ce-cli
-          - containerd.io
-          - docker-buildx-plugin
-          - docker-compose-plugin
-        state: latest
-        update_cache: yes
+        name: docker-compose
+        state: present
 
-    - name: Ensure Docker is running
-      service:
-        name: docker
-        state: started
-        enabled: yes
-    
-    - name: Clone dhis2-docker repository
-      git:
-        repo: 'https://github.com/ejimba/dhis2-docker.git'
-        dest: /opt/dhis2-docker
-        force: yes
+    - name: Ensure dhis2 network is created
+      docker_network:
+        name: dhis2
+        state: present
 
-    - name: Set JAVA_OPTS in docker-compose.yml
-      ansible.builtin.lineinfile:
-        path: /opt/dhis2-docker/docker-compose.yml
-        regexp: 'JAVA_OPTS: -Xms2048m -Xmx4096m'
-        line: '      JAVA_OPTS: -Xms10240m -Xmx10240m'
+    - name: Ensure nginx-proxy container is running
+      docker_container:
+        name: nginx-proxy
+        image: jwilder/nginx-proxy
+        ports:
+          - "80:80"
+          - "443:443"
+        volumes:
+          - /var/run/docker.sock:/tmp/docker.sock:ro
+          - /etc/nginx/certs:/etc/nginx/certs:rw
+          - /etc/nginx/vhost.d:/etc/nginx/vhost.d
+          - /usr/share/nginx/html:/usr/share/nginx/html
+        restart_policy: unless-stopped
+        labels:
+          com.github.nginx-proxy.nginx: "true"
+        networks:
+          - name: dhis2
 
-    - name: Change permissions of /opt/dhis2-docker/data/dhis
-      ansible.builtin.file:
-        path: /opt/dhis2-docker/data/dhis
-        mode: '0777'
-        state: directory
-        recurse: yes
+    - name: Ensure Let's Encrypt companion container is running
+      docker_container:
+        name: letsencrypt-nginx-proxy-companion
+        image: jrcs/letsencrypt-nginx-proxy-companion
+        volumes:
+          - /var/run/docker.sock:/var/run/docker.sock:ro
+          - /etc/nginx/certs:/etc/nginx/certs:rw
+          - /usr/share/nginx/html:/usr/share/nginx/html
+        env:
+          NGINX_PROXY_CONTAINER: nginx-proxy
+        networks:
+          - name: dhis2
+        restart_policy: unless-stopped
 
-    - name: Run Docker Compose for dhis2-docker
-      command: docker compose up -d
-      args:
-        chdir: /opt/dhis2-docker
+    - include_role:
+        name: dhis2_docker

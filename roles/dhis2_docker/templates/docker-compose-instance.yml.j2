@@ -1,0 +1,43 @@
+version: '3'
+services:
+  {{ item.instance_name }}:
+    container_name: {{ item.instance_name }}
+    environment:
+      VIRTUAL_HOST: {{ item.domain }}
+      LETSENCRYPT_HOST: {{ item.domain }}
+      LETSENCRYPT_EMAIL: {{ item.email }}
+      SERVER_HTTPS: "{{ 'on' if item.ssl_enabled == 'true' else 'off' }}"
+      SERVER_BASE_URL: "{{ 'https://' + item.domain if item.ssl_enabled == 'true' else 'http://localhost:' + item.port }}"
+      DHIS2_HOME: /DHIS2_home
+      JAVA_OPTS: {{ item.java_opts }}
+      TZ: {{ item.timezone }}
+      POSTGRES_HOST: {{ item.postgres_host }}
+      POSTGRES_PORT: {{ item.postgres_port }}
+      POSTGRES_DB: {{ item.postgres_db }}
+      POSTGRES_USER: {{ item.postgres_user }}
+      POSTGRES_PASSWORD: {{ item.postgres_password }}
+    image: dhis2/core:2.41
+    depends_on:
+      - {{ item.instance_name }}_postgres
+    networks:
+      - dhis2
+    ports:
+      - "{{ item.port }}:8080"
+    restart: unless-stopped
+    volumes:
+      - /opt/dhis2/{{ item.instance_name }}/dhis:/DHIS2_home:rw
+  {{ item.instance_name }}_postgres:
+    container_name: {{ item.instance_name }}_postgres
+    environment:
+      POSTGRES_DB: {{ item.postgres_db }}
+      POSTGRES_USER: {{ item.postgres_user }}
+      POSTGRES_PASSWORD: {{ item.postgres_password }}
+    image: postgis/postgis:15-3.4
+    networks:
+      - dhis2
+    volumes:
+      - /opt/dhis2/{{ item.instance_name }}/postgres:/var/lib/postgresql/data
+    restart: unless-stopped
+networks:
+  dhis2:
+    external: true
